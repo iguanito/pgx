@@ -614,14 +614,8 @@ func (c *Conn) QueryRowEx(ctx context.Context, sql string, options *QueryExOptio
 	return (*Row)(rows)
 }
 
-
-
 func FreshContext(ctx context.Context) context.Context {
 	return context.WithValue(context.Background(), traceIdKey, ctx.Value(traceIdKey))
-}
-
-func NewContext(ctx context.Context, traceId string) context.Context {
-	return context.WithValue(ctx, traceIdKey, traceId)
 }
 
 // GetTraceId returns the traceId value stored in ctx, if any.
