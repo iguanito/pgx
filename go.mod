@@ -7,7 +7,7 @@ require (
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/hashicorp/go-version v1.2.1 // indirect
-	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733
+	github.com/iguanito/pgx v0.0.0-20201214211054-f0ba05197159
 	github.com/lib/pq v1.9.0
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/pkg/errors v0.9.1

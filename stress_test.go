@@ -11,8 +11,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/jackc/fake"
-	"github.com/jackc/pgx"
+	"github.com/iguanito/fake"
+	"github.com/iguanito/pgx"
 )
 
 type execer interface {

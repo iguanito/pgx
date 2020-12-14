@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/jackc/pgx"
-	"github.com/jackc/pgx/pgtype"
+	"github.com/iguanito/pgx"
+	"github.com/iguanito/pgx/pgtype"
 	"github.com/pkg/errors"
 )
 

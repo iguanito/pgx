@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jackc/pgx/pgtype"
-	"github.com/jackc/pgx/pgtype/testutil"
+	"github.com/iguanito/pgx/pgtype"
+	"github.com/iguanito/pgx/pgtype/testutil"
 )
 
 func TestJSONTranscode(t *testing.T) {

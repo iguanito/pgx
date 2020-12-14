@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/jackc/pgx/pgio"
+	"github.com/iguanito/pgx/pgio"
 	"github.com/pkg/errors"
 )
 

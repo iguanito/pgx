@@ -9,9 +9,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/jackc/pgx/internal_/sanitize"
-	"github.com/jackc/pgx/pgproto3"
-	"github.com/jackc/pgx/pgtype"
+	"github.com/iguanito/pgx/internal_/sanitize"
+	"github.com/iguanito/pgx/pgproto3"
+	"github.com/iguanito/pgx/pgtype"
 )
 
 type contextKey string
@@ -425,13 +425,12 @@ type QueryExOptions struct {
 }
 
 func (c *Conn) QueryEx(ctx context.Context, sql string, options *QueryExOptions, args ...interface{}) (rows *Rows, err error) {
-	if traceId, ok := GetTraceId(ctx); ok {
-		c.log()
-	}
+	c.logWithContext(ctx, "executing query")
 	c.lastStmtSent = false
 	c.lastActivityTime = time.Now()
 	rows = c.getRows(sql, args)
 
+	// TODO
 	err = c.waitForPreviousCancelQuery(ctx)
 	if err != nil {
 		rows.fatal(err)
