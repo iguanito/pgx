@@ -11,7 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/iguanito/fake"
+	"github.com/jackc/fake"
 	"github.com/iguanito/pgx"
 )
 
