@@ -873,7 +873,13 @@ func (c *Conn) LocalAddr() (net.Addr, error) {
 // Close closes a connection. It is safe to call Close on a already closed
 // connection.
 func (c *Conn) Close() (err error) {
+	return c.CloseWithContext(context.Background())
+}
+
+func (c *Conn) CloseWithContext(ctx context.Context) (err error) {
+	c.logWithContext(ctx, "closing connection")
 	c.mux.Lock()
+	c.logWithContext(ctx, "connection mutex acquired")
 	defer c.mux.Unlock()
 
 	if c.status < connStatusIdle {
@@ -882,9 +888,11 @@ func (c *Conn) Close() (err error) {
 	c.status = connStatusClosed
 
 	defer func() {
+		c.logWithContext(ctx, "closing tcp connection")
 		c.conn.Close()
 		c.causeOfDeath = errors.New("Closed")
 		if c.shouldLog(LogLevelInfo) {
+			c.logWithContext(ctx, "closed tcp connection")
 			c.log(LogLevelInfo, "closed connection", nil)
 		}
 	}()
@@ -2364,4 +2372,8 @@ func connInfoFromRows(rows *Rows, err error) (map[string]pgtype.OID, error) {
 // attempted to be executed will this return true.
 func (c *Conn) LastStmtSent() bool {
 	return c.lastStmtSent
+}
+
+func (c *Conn) logWithContext(ctx context.Context, s string) {
+
 }
