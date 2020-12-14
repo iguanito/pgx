@@ -15,8 +15,7 @@ import (
 )
 
 type contextKey string
-
-var traceIdKey contextKey
+var traceIdKey = contextKey("traceId")
 
 // Row is a convenience wrapper over Rows that is returned by QueryRow.
 type Row Rows
