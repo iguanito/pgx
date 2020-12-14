@@ -2,6 +2,7 @@ package pgx
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -104,9 +105,18 @@ func NewConnPool(config ConnPoolConfig) (p *ConnPool, err error) {
 
 // Acquire takes exclusive use of a connection until it is released.
 func (p *ConnPool) Acquire() (*Conn, error) {
+	return p.AcquireWithContext(context.Background())
+}
+
+func (p *ConnPool) AcquireWithContext(ctx context.Context) (*Conn, error) {
+	p.log(ctx, "Acquiring connection")
+	p.log(ctx, "Getting connection pool lock")
 	p.cond.L.Lock()
-	c, err := p.acquire(nil)
+	p.log(ctx, "Connection pool lock acquired")
+	c, err := p.acquireWithContext(nil, ctx)
+	p.log(ctx, "Connection acquired")
 	p.cond.L.Unlock()
+	p.log(ctx, "Connection pool lock released")
 	return c, err
 }
 
@@ -136,6 +146,10 @@ func (p *ConnPool) deadlinePassed(deadline *time.Time) bool {
 
 // acquire performs acquision assuming pool is already locked
 func (p *ConnPool) acquire(deadline *time.Time) (*Conn, error) {
+	return p.acquireWithContext(deadline, context.Background())
+}
+
+func (p *ConnPool) acquireWithContext(deadline *time.Time, ctx context.Context) (*Conn, error) {
 	if p.closed {
 		return nil, ErrClosedPool
 	}
@@ -149,6 +163,7 @@ func (p *ConnPool) acquire(deadline *time.Time) (*Conn, error) {
 		c.poolResetCount = p.resetCount
 		copy(p.availableConnections, p.availableConnections[1:])
 		p.availableConnections = p.availableConnections[:numAvailable-1]
+		p.log(ctx, fmt.Sprintf("found available existing connection pid=%d", c.PID()))
 		return c, nil
 	}
 
@@ -178,16 +193,20 @@ func (p *ConnPool) acquire(deadline *time.Time) (*Conn, error) {
 		// Create a new connection.
 		// Careful here: createConnectionUnlocked() removes the current lock,
 		// creates a connection and then locks it back.
+		p.log(ctx, "no connection available, creating connection")
 		c, err := p.createConnectionUnlocked()
 		if err != nil {
 			return nil, err
 		}
 		c.poolResetCount = p.resetCount
 		p.allConnections = append(p.allConnections, c)
+		p.log(ctx, fmt.Sprintf("connection created pid=%d", c.PID()))
 		return c, nil
 	}
 	// All connections are in use and we cannot create more
 	if p.logLevel >= LogLevelWarn {
+		p.log(ctx, "no connection available")
+		// not removing this to not break existing alarm
 		p.logger.Log(LogLevelWarn, "waiting for available connection", nil)
 	}
 
@@ -196,6 +215,7 @@ func (p *ConnPool) acquire(deadline *time.Time) (*Conn, error) {
 		if p.deadlinePassed(deadline) {
 			return nil, ErrAcquireTimeout
 		}
+		p.log(ctx, "will wait for connection")
 		p.cond.Wait()
 	}
 
@@ -203,11 +223,18 @@ func (p *ConnPool) acquire(deadline *time.Time) (*Conn, error) {
 	if timer != nil {
 		timer.Stop()
 	}
+
+	p.log(ctx, "finished waiting for connection")
 	return p.acquire(deadline)
 }
 
 // Release gives up use of a connection.
 func (p *ConnPool) Release(conn *Conn) {
+	p.ReleaseWithContext(conn, context.Background())
+}
+
+func (p *ConnPool) ReleaseWithContext(conn *Conn, ctx context.Context) {
+	p.log(ctx, "releasing connection")
 	if conn.ctxInProgress {
 		panic("should never release when context is in progress")
 	}
@@ -216,6 +243,7 @@ func (p *ConnPool) Release(conn *Conn) {
 		conn.Exec("rollback")
 	}
 
+	p.log(ctx, "unlistening to channels")
 	if len(conn.channels) > 0 {
 		if err := conn.Unlisten("*"); err != nil {
 			conn.die(err)
@@ -224,21 +252,31 @@ func (p *ConnPool) Release(conn *Conn) {
 	}
 	conn.notifications = nil
 
+	p.log(ctx, "acquiring connection pool lock")
 	p.cond.L.Lock()
+	p.log(ctx, "connection pool lock acquired")
 
 	if conn.poolResetCount != p.resetCount {
+		p.log(ctx, fmt.Sprintf("closing connection pid=%d", conn.PID()))
 		conn.Close()
+		p.log(ctx, fmt.Sprintf("connection closed pid=%d", conn.PID()))
 		p.cond.L.Unlock()
+		p.log(ctx, "connection pool lock released")
 		p.cond.Signal()
 		return
 	}
 
 	if conn.IsAlive() {
+		p.log(ctx, fmt.Sprintf("connection is marked as available in pool pid=%d", conn.pid))
 		p.availableConnections = append(p.availableConnections, conn)
 	} else {
+		p.log(ctx, fmt.Sprintf("connection is about to be removed from pool pid=%d", conn.pid))
 		p.removeFromAllConnections(conn)
 	}
+
+	p.log(ctx, "releasing connection pool lock")
 	p.cond.L.Unlock()
+	p.log(ctx, "connection pool lock released. Connection has been released")
 	p.cond.Signal()
 }
 
@@ -401,6 +439,24 @@ func (p *ConnPool) Query(sql string, args ...interface{}) (*Rows, error) {
 	}
 
 	rows, err := c.Query(sql, args...)
+	if err != nil {
+		p.Release(c)
+		return rows, err
+	}
+
+	rows.connPool = p
+
+	return rows, nil
+}
+
+func (p *ConnPool) QueryWithContext(sql string, ctx context.Context, args ...interface{}) (*Rows, error) {
+	c, err := p.AcquireWithContext(ctx)
+	if err != nil {
+		// Because checking for errors can be deferred to the *Rows, build one with the error
+		return &Rows{closed: true, err: err}, err
+	}
+
+	rows, err := c.QueryWithContext(sql, ctx, args...)
 	if err != nil {
 		p.Release(c)
 		return rows, err
@@ -599,4 +655,17 @@ func (p *ConnPool) CopyToWriter(w io.Writer, sql string, args ...interface{}) (C
 func (p *ConnPool) BeginBatch() *Batch {
 	c, err := p.Acquire()
 	return &Batch{conn: c, connPool: p, err: err}
+}
+
+func (p *ConnPool) log(ctx context.Context, msg string) {
+	if ctx == nil {
+		return
+	}
+
+	if traceId, ok := GetTraceId(ctx); ok && p.logLevel <= LogLevelInfo {
+		data := map[string]interface{}{
+			"traceId": traceId,
+		}
+		p.logger.Log(LogLevelInfo, msg, data)
+	}
 }

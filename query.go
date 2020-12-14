@@ -14,6 +14,10 @@ import (
 	"github.com/jackc/pgx/pgtype"
 )
 
+type contextKey string
+
+var traceIdKey contextKey
+
 // Row is a convenience wrapper over Rows that is returned by QueryRow.
 type Row Rows
 
@@ -65,6 +69,10 @@ func (rows *Rows) FieldDescriptions() []FieldDescription {
 // Close closes the rows, making the connection ready for use again. It is safe
 // to call Close after rows is already closed.
 func (rows *Rows) Close() {
+	rows.CloseWithContext(context.Background())
+}
+
+func (rows *Rows) CloseWithContext(ctx context.Context) {
 	if rows.closed {
 		return
 	}
@@ -89,7 +97,9 @@ func (rows *Rows) Close() {
 	}
 
 	if rows.unlockConn {
+		rows.log(ctx, "unlocking connection")
 		rows.conn.unlock()
+		rows.log(ctx, "connection unlocked")
 		rows.unlockConn = false
 	}
 
@@ -107,11 +117,15 @@ func (rows *Rows) Close() {
 	}
 
 	if rows.batch != nil && rows.err != nil {
+		rows.log(ctx, "killing batch")
 		rows.batch.die(rows.err)
+		rows.log(ctx, "batch killed")
 	}
 
 	if rows.connPool != nil {
-		rows.connPool.Release(rows.conn)
+		rows.log(ctx, "releasing connection and putting it back to the pool")
+		rows.connPool.ReleaseWithContext(rows.conn, ctx)
+		rows.log(ctx, "connection released")
 	}
 }
 
@@ -134,6 +148,10 @@ func (rows *Rows) fatal(err error) {
 // row and false if no more rows are available. It automatically closes rows
 // when all rows are read.
 func (rows *Rows) Next() bool {
+	return rows.NextWithContext(context.Background())
+}
+
+func (rows *Rows) NextWithContext(ctx context.Context) bool {
 	if rows.closed {
 		return false
 	}
@@ -170,9 +188,11 @@ func (rows *Rows) Next() bool {
 			rows.values = msg.Values
 			return true
 		case *pgproto3.CommandComplete:
+			rows.log(ctx, "Command complete")
 			if rows.batch != nil {
 				rows.batch.pendingCommandComplete = false
 			}
+
 			rows.Close()
 			return false
 
@@ -183,6 +203,19 @@ func (rows *Rows) Next() bool {
 				return false
 			}
 		}
+	}
+}
+
+func (rows *Rows) log(ctx context.Context, msg string) {
+	if ctx == nil {
+		return
+	}
+
+	if traceId, ok := GetTraceId(ctx); ok && rows.conn.shouldLog(LogLevelInfo) {
+		data := map[string]interface{}{
+			"traceId": traceId,
+		}
+		rows.conn.log(LogLevelInfo, msg, data)
 	}
 }
 
@@ -353,6 +386,10 @@ func (c *Conn) Query(sql string, args ...interface{}) (*Rows, error) {
 	return c.QueryEx(context.Background(), sql, nil, args...)
 }
 
+func (c *Conn) QueryWithContext(sql string, ctx context.Context, args ...interface{}) (*Rows, error) {
+	return c.QueryEx(FreshContext(ctx), sql, nil, args...)
+}
+
 func (c *Conn) getRows(sql string, args []interface{}) *Rows {
 	if len(c.preallocatedRows) == 0 {
 		c.preallocatedRows = make([]Rows, 64)
@@ -388,6 +425,9 @@ type QueryExOptions struct {
 }
 
 func (c *Conn) QueryEx(ctx context.Context, sql string, options *QueryExOptions, args ...interface{}) (rows *Rows, err error) {
+	if traceId, ok := GetTraceId(ctx); ok {
+		c.log()
+	}
 	c.lastStmtSent = false
 	c.lastActivityTime = time.Now()
 	rows = c.getRows(sql, args)
@@ -572,4 +612,20 @@ func (c *Conn) sanitizeAndSendSimpleQuery(sql string, args ...interface{}) (err 
 func (c *Conn) QueryRowEx(ctx context.Context, sql string, options *QueryExOptions, args ...interface{}) *Row {
 	rows, _ := c.QueryEx(ctx, sql, options, args...)
 	return (*Row)(rows)
+}
+
+
+
+func FreshContext(ctx context.Context) context.Context {
+	return context.WithValue(context.Background(), traceIdKey, ctx.Value(traceIdKey))
+}
+
+func NewContext(ctx context.Context, traceId string) context.Context {
+	return context.WithValue(ctx, traceIdKey, traceId)
+}
+
+// GetTraceId returns the traceId value stored in ctx, if any.
+func GetTraceId(ctx context.Context) (string, bool) {
+	s, ok := ctx.Value(traceIdKey).(string)
+	return s, ok
 }
