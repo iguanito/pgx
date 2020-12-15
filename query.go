@@ -14,9 +14,7 @@ import (
 	"github.com/iguanito/pgx/pgtype"
 )
 
-type contextKey string
-
-var traceIdKey = contextKey("traceId")
+const traceIdKey = "traceId"
 
 // Row is a convenience wrapper over Rows that is returned by QueryRow.
 type Row Rows
