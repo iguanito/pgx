@@ -388,7 +388,7 @@ func (c *Conn) Query(sql string, args ...interface{}) (*Rows, error) {
 }
 
 func (c *Conn) QueryWithContext(ctx context.Context, sql string, args ...interface{}) (*Rows, error) {
-	return c.QueryEx(FreshContext(ctx), sql, nil, args...)
+	return c.QueryEx(ctx, sql, nil, args...)
 }
 
 func (c *Conn) getRows(sql string, args []interface{}) *Rows {
@@ -614,7 +614,7 @@ func (c *Conn) QueryRowEx(ctx context.Context, sql string, options *QueryExOptio
 	return (*Row)(rows)
 }
 
-// Fresh creates an independant context from the one passed to it.
+// Fresh creates an independent context from the one passed to it.
 // This is not how context are supposed to work. It was done this
 // way to avoid side-effect while introducing contexts to pgx
 func FreshContext(ctx context.Context) context.Context {

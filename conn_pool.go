@@ -114,7 +114,7 @@ func (p *ConnPool) AcquireWithContext(ctx context.Context) (*Conn, error) {
 	p.cond.L.Lock()
 	p.log(ctx, "Connection pool lock acquired")
 	c, err := p.acquireWithContext(ctx, nil)
-	p.log(ctx, "Connection acquired")
+	p.log(ctx, fmt.Sprintf("Connection acquired pid=%s", c.PID()))
 	p.cond.L.Unlock()
 	p.log(ctx, "Connection pool lock released")
 	return c, err
@@ -450,13 +450,14 @@ func (p *ConnPool) Query(sql string, args ...interface{}) (*Rows, error) {
 }
 
 func (p *ConnPool) QueryWithContext(ctx context.Context, sql string, args ...interface{}) (*Rows, error) {
-	c, err := p.AcquireWithContext(ctx)
+	newContext := FreshContext(ctx)
+	c, err := p.AcquireWithContext(newContext)
 	if err != nil {
 		// Because checking for errors can be deferred to the *Rows, build one with the error
 		return &Rows{closed: true, err: err}, err
 	}
 
-	rows, err := c.QueryWithContext(ctx, sql, args...)
+	rows, err := c.QueryWithContext(newContext, sql, args...)
 	if err != nil {
 		p.Release(c)
 		return rows, err
