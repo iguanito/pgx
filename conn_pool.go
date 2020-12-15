@@ -114,7 +114,7 @@ func (p *ConnPool) AcquireWithContext(ctx context.Context) (*Conn, error) {
 	p.cond.L.Lock()
 	p.log(ctx, "Connection pool lock acquired")
 	c, err := p.acquireWithContext(ctx, nil)
-	p.log(ctx, fmt.Sprintf("Connection acquired pid=%s", c.PID()))
+	p.log(ctx, fmt.Sprintf("Connection acquired pid=%d", c.PID()))
 	p.cond.L.Unlock()
 	p.log(ctx, "Connection pool lock released")
 	return c, err
