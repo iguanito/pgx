@@ -192,7 +192,7 @@ func (rows *Rows) NextWithContext(ctx context.Context) bool {
 				rows.batch.pendingCommandComplete = false
 			}
 
-			rows.Close()
+			rows.CloseWithContext(ctx)
 			return false
 
 		default:
