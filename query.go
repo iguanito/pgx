@@ -123,7 +123,7 @@ func (rows *Rows) CloseWithContext(ctx context.Context) {
 
 	if rows.connPool != nil {
 		rows.log(ctx, "releasing connection and putting it back to the pool")
-		rows.connPool.ReleaseWithContext(rows.conn, ctx)
+		rows.connPool.ReleaseWithContext(ctx, rows.conn)
 		rows.log(ctx, "connection released")
 	}
 }
@@ -385,7 +385,7 @@ func (c *Conn) Query(sql string, args ...interface{}) (*Rows, error) {
 	return c.QueryEx(context.Background(), sql, nil, args...)
 }
 
-func (c *Conn) QueryWithContext(sql string, ctx context.Context, args ...interface{}) (*Rows, error) {
+func (c *Conn) QueryWithContext(ctx context.Context, sql string, args ...interface{}) (*Rows, error) {
 	return c.QueryEx(FreshContext(ctx), sql, nil, args...)
 }
 
@@ -612,6 +612,9 @@ func (c *Conn) QueryRowEx(ctx context.Context, sql string, options *QueryExOptio
 	return (*Row)(rows)
 }
 
+// Fresh creates an independant context from the one passed to it.
+// This is not how context are supposed to work. It was done this
+// way to avoid side-effect while introducing contexts to pgx
 func FreshContext(ctx context.Context) context.Context {
 	return context.WithValue(context.Background(), traceIdKey, ctx.Value(traceIdKey))
 }

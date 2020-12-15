@@ -113,7 +113,7 @@ func (p *ConnPool) AcquireWithContext(ctx context.Context) (*Conn, error) {
 	p.log(ctx, "Getting connection pool lock")
 	p.cond.L.Lock()
 	p.log(ctx, "Connection pool lock acquired")
-	c, err := p.acquireWithContext(nil, ctx)
+	c, err := p.acquireWithContext(ctx, nil)
 	p.log(ctx, "Connection acquired")
 	p.cond.L.Unlock()
 	p.log(ctx, "Connection pool lock released")
@@ -146,10 +146,10 @@ func (p *ConnPool) deadlinePassed(deadline *time.Time) bool {
 
 // acquire performs acquision assuming pool is already locked
 func (p *ConnPool) acquire(deadline *time.Time) (*Conn, error) {
-	return p.acquireWithContext(deadline, context.Background())
+	return p.acquireWithContext(context.Background(), deadline)
 }
 
-func (p *ConnPool) acquireWithContext(deadline *time.Time, ctx context.Context) (*Conn, error) {
+func (p *ConnPool) acquireWithContext(ctx context.Context, deadline *time.Time) (*Conn, error) {
 	if p.closed {
 		return nil, ErrClosedPool
 	}
@@ -230,10 +230,10 @@ func (p *ConnPool) acquireWithContext(deadline *time.Time, ctx context.Context) 
 
 // Release gives up use of a connection.
 func (p *ConnPool) Release(conn *Conn) {
-	p.ReleaseWithContext(conn, context.Background())
+	p.ReleaseWithContext(context.Background(), conn)
 }
 
-func (p *ConnPool) ReleaseWithContext(conn *Conn, ctx context.Context) {
+func (p *ConnPool) ReleaseWithContext(ctx context.Context, conn *Conn) {
 	p.log(ctx, "releasing connection")
 	if conn.ctxInProgress {
 		panic("should never release when context is in progress")
@@ -449,14 +449,14 @@ func (p *ConnPool) Query(sql string, args ...interface{}) (*Rows, error) {
 	return rows, nil
 }
 
-func (p *ConnPool) QueryWithContext(sql string, ctx context.Context, args ...interface{}) (*Rows, error) {
+func (p *ConnPool) QueryWithContext(ctx context.Context, sql string, args ...interface{}) (*Rows, error) {
 	c, err := p.AcquireWithContext(ctx)
 	if err != nil {
 		// Because checking for errors can be deferred to the *Rows, build one with the error
 		return &Rows{closed: true, err: err}, err
 	}
 
-	rows, err := c.QueryWithContext(sql, ctx, args...)
+	rows, err := c.QueryWithContext(ctx, sql, args...)
 	if err != nil {
 		p.Release(c)
 		return rows, err
