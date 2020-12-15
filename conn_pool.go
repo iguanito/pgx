@@ -657,15 +657,18 @@ func (p *ConnPool) BeginBatch() *Batch {
 	return &Batch{conn: c, connPool: p, err: err}
 }
 
+// will log if log level = INFO or higher
 func (p *ConnPool) log(ctx context.Context, msg string) {
 	if ctx == nil {
 		return
 	}
 
-	if traceId, ok := GetTraceId(ctx); ok && p.logLevel <= LogLevelInfo {
-		data := map[string]interface{}{
-			"traceId": traceId,
-		}
+	data := make(map[string]interface{})
+	if traceId, ok := GetTraceId(ctx); ok {
+		data["traceId"] = traceId
+	}
+
+	if p.logLevel <= LogLevelInfo {
 		p.logger.Log(LogLevelInfo, msg, data)
 	}
 }

@@ -15,6 +15,7 @@ import (
 )
 
 type contextKey string
+
 var traceIdKey = contextKey("traceId")
 
 // Row is a convenience wrapper over Rows that is returned by QueryRow.
@@ -205,15 +206,18 @@ func (rows *Rows) NextWithContext(ctx context.Context) bool {
 	}
 }
 
+// will log if log level = INFO or higher
 func (rows *Rows) log(ctx context.Context, msg string) {
 	if ctx == nil {
 		return
 	}
 
-	if traceId, ok := GetTraceId(ctx); ok && rows.conn.shouldLog(LogLevelInfo) {
-		data := map[string]interface{}{
-			"traceId": traceId,
-		}
+	data := make(map[string]interface{})
+	if traceId, ok := GetTraceId(ctx); ok {
+		data["traceId"] = traceId
+	}
+
+	if rows.conn.logLevel <= LogLevelInfo {
 		rows.conn.log(LogLevelInfo, msg, data)
 	}
 }

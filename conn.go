@@ -2374,15 +2374,19 @@ func (c *Conn) LastStmtSent() bool {
 	return c.lastStmtSent
 }
 
+// will log if log level = INFO or higher
 func (c *Conn) logWithContext(ctx context.Context, msg string) {
 	if ctx == nil {
 		return
 	}
 
-	if traceId, ok := GetTraceId(ctx); ok && c.logLevel <= LogLevelInfo {
-		data := map[string]interface{}{
-			"traceId": traceId,
-		}
+	data := make(map[string]interface{})
+	if traceId, ok := GetTraceId(ctx); ok {
+		data["traceId"] = traceId
+	}
+
+	if c.logLevel <= LogLevelInfo {
 		c.logger.Log(LogLevelInfo, msg, data)
 	}
+
 }
