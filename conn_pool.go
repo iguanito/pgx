@@ -660,7 +660,7 @@ func (p *ConnPool) BeginBatch() *Batch {
 
 // will log if log level = INFO or higher
 func (p *ConnPool) log(ctx context.Context, msg string) {
-	if ctx == nil {
+	if ctx == nil || p.logger == nil{
 		return
 	}
 

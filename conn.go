@@ -2376,7 +2376,7 @@ func (c *Conn) LastStmtSent() bool {
 
 // will log if log level = INFO or higher
 func (c *Conn) logWithContext(ctx context.Context, msg string) {
-	if ctx == nil {
+	if ctx == nil || c.logger == nil {
 		return
 	}
 

@@ -207,7 +207,7 @@ func (rows *Rows) NextWithContext(ctx context.Context) bool {
 
 // will log if log level = INFO or higher
 func (rows *Rows) log(ctx context.Context, msg string) {
-	if ctx == nil {
+	if ctx == nil || rows.conn.logger == nil {
 		return
 	}
 
