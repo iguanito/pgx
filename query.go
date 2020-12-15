@@ -104,14 +104,15 @@ func (rows *Rows) CloseWithContext(ctx context.Context) {
 	rows.closed = true
 
 	rows.err = rows.conn.termContext(rows.err)
+	traceId, _ := GetTraceId(ctx)
 
 	if rows.err == nil {
 		if rows.conn.shouldLog(LogLevelInfo) {
 			endTime := time.Now()
-			rows.conn.log(LogLevelInfo, "Query", map[string]interface{}{"sql": rows.sql, "args": logQueryArgs(rows.args), "time": endTime.Sub(rows.startTime), "rowCount": rows.rowCount})
+			rows.conn.log(LogLevelInfo, "Query", map[string]interface{}{"sql": rows.sql, "args": logQueryArgs(rows.args), "time": endTime.Sub(rows.startTime), "rowCount": rows.rowCount, "traceId": traceId})
 		}
 	} else if rows.conn.shouldLog(LogLevelError) {
-		rows.conn.log(LogLevelError, "Query", map[string]interface{}{"sql": rows.sql, "args": logQueryArgs(rows.args), "err": rows.err})
+		rows.conn.log(LogLevelError, "Query", map[string]interface{}{"sql": rows.sql, "args": logQueryArgs(rows.args), "err": rows.err, "traceId": traceId})
 	}
 
 	if rows.batch != nil && rows.err != nil {
